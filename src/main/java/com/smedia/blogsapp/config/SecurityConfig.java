@@ -1,14 +1,15 @@
 package com.smedia.blogsapp.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -20,15 +21,26 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
+import com.smedia.blogsapp.security.JwtAuthenticationEntryPoint;
+import com.smedia.blogsapp.security.JwtAuthenticationFilter;
+
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 	
 	private UserDetailsService userDetailsService;
+	// whenever unauthorized user trying to access protected resource, it throws exception
+	private JwtAuthenticationEntryPoint authenticationEntryPoint;
+	// This filter will execute before executing spring security filters
+    private JwtAuthenticationFilter authenticationFilter;
 	
-	public SecurityConfig(UserDetailsService userDetailsService) {
+    @Autowired
+	public SecurityConfig(UserDetailsService userDetailsService, JwtAuthenticationEntryPoint authenticationEntryPoint,
+			JwtAuthenticationFilter authenticationFilter) {
 		super();
 		this.userDetailsService = userDetailsService;
+		this.authenticationEntryPoint = authenticationEntryPoint;
+		this.authenticationFilter = authenticationFilter;
 	}
 
 	@Bean
@@ -56,8 +68,15 @@ public class SecurityConfig {
 		http.csrf().disable().authorizeHttpRequests(authorize -> 
 							//authorize.anyRequest().authenticated())
 							authorize.requestMatchers(HttpMethod.GET, "/api/**").permitAll()
-							.anyRequest().authenticated())
-					.httpBasic(Customizer.withDefaults());
+							.requestMatchers("/api/v1/auth/**").permitAll()
+							.anyRequest().authenticated()
+					//.httpBasic(Customizer.withDefaults()); //Removed this basic authentication, implemented our own login api
+				).exceptionHandling( exception -> exception
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                ).sessionManagement( session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                );
+		http.addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
 		
 		return http.build();
 	}
